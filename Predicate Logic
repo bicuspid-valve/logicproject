@@ -1,1 +1,254 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Feb  1 17:54:43 2021
 
+@author: iceti
+"""
+
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Jan 27 14:21:59 2021
+
+@author: iceti
+"""
+
+def convertolist(list1):
+    a = ""
+    returnlist = []
+    for i in list1:
+        if i == ",":
+            returnlist.append(a)
+            a = ""
+        else:
+            a += i
+    returnlist.append(a)
+    return returnlist
+        
+class Formula:
+    integers = ["1","2","3","4","5","6","7","8","9","0"]
+    relations = ["P","Q","R"]
+    const = ["a","b","c","d","e"]
+    bincon = ["&","o",">"]
+    quantifiers = ["A", "E"]
+    variables = ["x", "y", "z"]
+    
+    def __init__(self,text):
+        self.subformulas = []
+        self.formula = list(text)
+        self.printformula = list(text)
+        for i in range(len(self.formula)):
+            if self.formula[i] == "A":
+                self.printformula[i] = "\u2200"
+            if self.formula[i] == "E":
+                self.printformula[i] = "\u2203"
+            if self.formula[i] == "&":
+                self.printformula[i] = "\u2227"
+            if self.formula[i] == "o":
+                self.printformula[i] = "\u2228"
+            if self.formula[i] == ">":
+                self.printformula[i] = "\u2192"
+            if self.formula[i] == "n":
+                self.printformula[i] = "\u00AC"
+    
+    def __repr__(self):
+        return "".join(self.printformula)
+    
+    def __len__(self):
+        return(len(self.formula))
+    
+    def getfirstletter(self):
+        return self.formula[0]
+    
+    def isterm(self, string):
+        if string[0] in self.variables or string[0] in self.const:
+            valid = True
+            for i in string[1:]:
+                if i not in self.integers:
+                    valid = False
+            return valid
+        else:
+            return False
+        
+    def isatomic(self):
+        if self.formula[0] in self.relations and self.formula[1] == "[" and self.formula[-1] == "]":
+            list1 = convertolist(self.formula[2:-1])
+            if len(list1) != int(list1[1]) + 2:
+                return False
+            else:
+                valid = True
+                for i in range(len(list1)):
+                    if i in [0,1]:
+                        if list1[i] not in self.integers:
+                            valid = False
+                    else:
+                        if not self.isterm(list1[i]):
+                            valid = False
+                return valid
+        else:
+            return False
+        
+    def isquantifier(self):
+        if self.formula[0] in self.quantifiers and self.formula[1] == "[" and self.formula[-1] == "]":
+            list1 = convertolist(self.formula[2:-1])
+            if len(list1) != int(list1[0]) + 1:
+                return False
+            else:
+                valid = True
+                for i in range(len(list1)):
+                    if i == 0:
+                        if list1[i] not in self.integers:
+                            valid = False
+                    else:
+                        if not self.isterm(list1[i]):
+                            valid = False
+                return valid
+        else:
+            return False
+    
+    def splitbincon(self):
+        left = 0
+        right = 0
+        count = 0
+        cont = True
+        while cont:
+            count +=1
+            if self.formula[count] == "(":
+                left += 1
+            elif self.formula[count] == ")":
+                right += 1
+            if left == right and self.formula[count] == ")":
+                cont = False
+            elif left == right and self.formula[count] in self.relations:
+                cont = False
+                count = self.formula.index("]",count)
+        text1 = self.formula[1:count+1]
+        text2 = self.formula[count+2:-1]
+        conn = self.formula[count+1]
+        return [Formula(text1), Formula(text2), conn]
+    
+    def isformula(self):
+        print(self)
+        a = self.findprimesubformulas()
+        if type(a) == bool:
+            return a
+        else:
+            isformula = True
+            for i in a:
+                if i.isformula() == False:
+                    isformula = False
+            return isformula
+    
+    def findprimesubformulas(self):
+        if self.isatomic():
+            return True
+        elif self.formula[0] == "(":
+            left = 0
+            right = 0
+            count = 0
+            cont = True
+            while cont:
+                count +=1
+                if self.formula[count] == "(":
+                    left += 1
+                elif self.formula[count] == ")":
+                    right += 1
+                if left == right and self.formula[count] == ")":
+                    cont = False
+                elif left == right and self.formula[count] in self.relations:
+                    cont = False
+                    count = self.formula.index("]",count)
+                elif count == len(self.formula):
+                    return False
+            if self.formula[count+1] not in self.bincon:
+                return False
+            else:
+                text1 = self.formula[1:count+1]
+                text2 = self.formula[count+2:-1]
+                return [Formula(text1), Formula(text2)]
+        elif self.formula[0] == "n":
+            return [Formula(self.formula[1:])]
+        elif self.formula[0] in self.quantifiers and "]" in self.formula:
+            if Formula(self.formula[1:self.formula.index("]")+1]).isquantifier:
+                return [Formula(self.formula[self.formula.index("]")+1:])]        
+        else:
+            return False
+        
+    def istrue(self, structure): #evaluates the truth of a formula in a given structure, works recursively
+        if self.isatomic():
+            return structure.t_table[self.getfirstletter()]
+        elif self.getfirstletter() == "n":
+            formulaone = Formula(self.formula[1:])
+            return not formulaone.istrue(structure)
+        else:
+            a = self.splitbincon()
+            formulaone, formulatwo, conn = a[0], a[1], a[2]
+            if conn == "&":
+                return formulaone.istrue(structure) and formulatwo.istrue(structure)
+            elif conn == "o":
+                return formulaone.istrue(structure) or formulatwo.istrue(structure)
+            else:
+                return not(formulaone.istrue(structure)) or formulatwo.istrue(structure)
+
+    def genallstructures(self):
+        valuelist = [False]*len(self.atomic)
+        listoflists = []
+        structurelist = []
+        while False in valuelist:
+            listoflists.append(list(valuelist))
+            done = False
+            index = 0
+            while not done:
+                if valuelist[index] == False:
+                    valuelist[index] = True
+                    done = True
+                else:
+                    valuelist[index] = False
+                index += 1
+        listoflists.append(list(valuelist))
+        for i in listoflists:
+            structurelist.append(Structure(i))
+        return structurelist
+    
+    def listatoms(self):
+        atoms = []
+        if self.isatomic():
+            pass
+        
+    
+    def issatisfiable(self):
+        structurelist = self.genallstructures()
+        satisfiable = False
+        for i in structurelist:
+            if self.istrue(i):
+                print("Formula true in structure: "+str(i))
+                return True
+        return False
+            
+            
+
+class Structure(Formula):
+    def __init__(self, values):
+        zipped = zip(self.atomic, values)
+        self.t_table =  {key:val for key, val in zipped}
+        
+    def __repr__(self):
+        return str(self.t_table)
+        
+
+formula = input("Please input your formula: ")
+#string = input("Please input your term: ")
+
+#structure = Structure([True, True, False])
+
+f1 = Formula(formula)
+
+#print(f1.isterm(string))
+print(f1)
+print("Prime Subformulas: "+str(f1.findprimesubformulas()))
+print("Is formula: "+str(f1.isformula()))
+
+#print("Truth Value: "+str(f1.istrue(structure)))
+
+#print("Is satisfiable: "+str(f1.issatisfiable()))   
+
+#formula2 = "".join(formula2)
