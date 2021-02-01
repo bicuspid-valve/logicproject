@@ -90,8 +90,6 @@ class Formula:
     def isquantifier(self):
         if self.formula[0] in self.quantifiers and self.formula[1] == "[" and self.formula[-1] == "]":
             list1 = convertolist(self.formula[2:-1])
-            if len(list1) != int(list1[0]) + 1:
-                return False
             else:
                 valid = True
                 for i in range(len(list1)):
