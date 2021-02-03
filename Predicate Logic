@@ -72,36 +72,27 @@ class Formula:
     def isatomic(self):
         if self.formula[0] in self.relations and self.formula[1] == "[" and self.formula[-1] == "]":
             list1 = convertolist(self.formula[2:-1])
-            if len(list1) != int(list1[1]) + 2:
-                return False
-            else:
-                valid = True
-                for i in range(len(list1)):
-                    if i in [0,1]:
-                        if list1[i] not in self.integers:
-                            valid = False
-                    else:
-                        if not self.isterm(list1[i]):
-                            valid = False
-                return valid
+            valid = True
+            for i in range(len(list1)):
+                if i == 0 and list1[i] not in self.integers:
+                    valid = False
+                elif i != 0 and not self.isterm(list1[i]):
+                    print("error2")
+                    print("i: "+str(i))
+                    print(list1[i])
+                    valid = False
+            return valid
         else:
             return False
         
     def isquantifier(self):
         if self.formula[0] in self.quantifiers and self.formula[1] == "[" and self.formula[-1] == "]":
             list1 = convertolist(self.formula[2:-1])
-            if len(list1) != int(list1[0]) + 1:
-                return False
-            else:
-                valid = True
-                for i in range(len(list1)):
-                    if i == 0:
-                        if list1[i] not in self.integers:
-                            valid = False
-                    else:
-                        if not self.isterm(list1[i]):
-                            valid = False
-                return valid
+            valid = True
+            for i in range(len(list1)):
+                if not self.isterm(list1[i]):
+                    valid = False
+            return valid
         else:
             return False
     
@@ -127,15 +118,18 @@ class Formula:
         return [Formula(text1), Formula(text2), conn]
     
     def isformula(self):
-        print(self)
         a = self.findprimesubformulas()
         if type(a) == bool:
+            print(a)
+            print(self)
             return a
         else:
             isformula = True
             for i in a:
                 if i.isformula() == False:
                     isformula = False
+            print(isformula)
+            print(self)
             return isformula
     
     def findprimesubformulas(self):
@@ -252,3 +246,4 @@ print("Is formula: "+str(f1.isformula()))
 #print("Is satisfiable: "+str(f1.issatisfiable()))   
 
 #formula2 = "".join(formula2)
+
