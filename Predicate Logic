@@ -1,0 +1,409 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Feb  1 17:54:43 2021
+
+@author: iceti
+"""
+
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Jan 27 14:21:59 2021
+
+@author: iceti
+"""
+
+def converttolist(list1):
+    a = ""
+    returnlist = []
+    for i in list1:
+        if i == ",":
+            returnlist.append(a)
+            a = ""
+        else:
+            a += i
+    returnlist.append(a)
+    return returnlist
+        
+class Formula:
+    integers = ["1","2","3","4","5","6","7","8","9","0"]
+    relations = ["P","Q","R"]
+    const = ["a","b","c"]
+    bincon = ["&","o",">"]
+    quantifiers = ["A", "E"]
+    variables = ["x", "y", "z"]
+    
+    def __init__(self,text):
+        self.formula = list(text)
+        self.printformula = list(text)
+        for i in range(len(self.formula)):
+            if self.formula[i] == "A":
+                self.printformula[i] = "\u2200"
+            if self.formula[i] == "E":
+                self.printformula[i] = "\u2203"
+            if self.formula[i] == "&":
+                self.printformula[i] = "\u2227"
+            if self.formula[i] == "o":
+                self.printformula[i] = "\u2228"
+            if self.formula[i] == ">":
+                self.printformula[i] = "\u2192"
+            if self.formula[i] == "n":
+                self.printformula[i] = "\u00AC"
+    
+    def __repr__(self):
+        return "".join(self.printformula)
+    
+    def __len__(self):
+        return(len(self.formula))
+        
+    def getrawtext(self):
+        return "".join(self.formula)
+    
+    def getfirstletter(self):
+        return self.formula[0]
+    
+    def converttoobjects(self, list1, structure):
+        returnlist = []
+        for i in list1:
+            if self.isconstant(i):
+                returnlist.append(structure.constantasg[i])
+            elif self.isvariable(i):
+                returnlist.append(structure.varasg[i])
+        return returnlist
+                
+    
+    def isterm(self, string):
+        if self.isconstant(string) or self.isvariable(string):
+            return True
+        else:
+            return False
+    
+    def isconstant(self, string):
+        if string[0] in self.const:
+            valid = True
+            for i in string[1:]:
+                if i not in self.integers:
+                    valid = False
+            return valid
+        else:
+            return False
+        
+    def isvariable(self, string):
+        if string[0] in self.variables:
+            valid = True
+            for i in string[1:]:
+                if i not in self.integers:
+                    valid = False
+            return valid
+        else:
+            return False
+        
+    def isatomic(self):
+        if self.formula[0] in self.relations and self.formula[1] == "[" and self.formula[-1] == "]":
+            list1 = converttolist(self.formula[2:-1])
+            valid = True
+            for i in range(len(list1)):
+                if i == 0 and list1[i] not in self.integers:
+                    valid = False
+                elif i != 0 and not self.isterm(list1[i]):
+                    valid = False
+            return valid
+        else:
+            return False
+        
+    def isquantifier(self):
+        if self.formula[0] in self.quantifiers and self.formula[1] == "[" and self.formula[-1] == "]":
+            list1 = converttolist(self.formula[2:-1])
+            valid = True
+            for i in range(len(list1)):
+                if not self.isterm(list1[i]):
+                    valid = False
+            return valid
+        else:
+            return False
+    
+    def splitbincon(self):
+        left = 0
+        right = 0
+        count = 0
+        cont = True
+        while cont:
+            count +=1
+            if self.formula[count] == "(":
+                left += 1
+            elif self.formula[count] == ")":
+                right += 1
+            if left == right and self.formula[count] == ")":
+                cont = False
+            elif left == right and self.formula[count] in self.relations:
+                cont = False
+                count = self.formula.index("]",count)
+        text1 = self.formula[1:count+1]
+        text2 = self.formula[count+2:-2]
+        conn = self.formula[count+1]
+        return [Formula(text1), Formula(text2), conn]
+    
+    def isformula(self):
+        a = self.findprimesubformulas()
+        if type(a) == bool:
+            return a
+        else:
+            isformula = True
+            for i in a:
+                if i.isformula() == False:
+                    isformula = False
+            return isformula
+    
+    def findprimesubformulas(self):
+        if self.isatomic():
+            return True
+        elif self.formula[0] == "(":
+            left = 0
+            right = 0
+            count = 0
+            cont = True
+            while cont:
+                count +=1
+                if self.formula[count] == "(":
+                    left += 1
+                elif self.formula[count] == ")":
+                    right += 1
+                if left == right and self.formula[count] == ")":
+                    cont = False
+                elif left == right and self.formula[count] in self.relations:
+                    cont = False
+                    count = self.formula.index("]",count)
+                elif count == len(self.formula):
+                    return False
+            if self.formula[count+1] not in self.bincon:
+                return False
+            else:
+                text1 = self.formula[1:count+1]
+                text2 = self.formula[count+2:-2]
+                return [Formula(text1), Formula(text2)]
+        elif self.formula[0] == "n":
+            return [Formula(self.formula[1:])]
+        elif self.formula[0] in self.quantifiers and "]" in self.formula:
+            if Formula(self.formula[1:self.formula.index("]")+1]).isquantifier:
+                return [Formula(self.formula[self.formula.index("]")+1:])]        
+        else:
+            return False
+        
+    def istrue(self, structure, printt): #evaluates the truth of a formula in a given structure, works recursively
+        if self.isatomic():
+            contents = converttolist(self.formula[2:-1])
+            objects = self.converttoobjects(contents[1:], structure)
+            relation = self.formula[0]+str(contents[0])
+            if objects in structure.relationasg[relation]:
+                tval = True
+            else:
+                tval = False
+        elif self.getfirstletter() == "n":
+            formulaone = Formula(self.formula[1:])
+            tval = not formulaone.istrue(structure, printt)
+        elif self.formula[0] in self.quantifiers:
+            endpos = self.formula.index("]")
+            listvars = converttolist(self.formula[2:endpos])
+            newstructures = self.genallvar_assign(structure, listvars)
+            formulaone = Formula(self.formula[endpos+1:])
+            if self.formula[0] == "A":
+                tval = True
+                for i in newstructures:
+                    if printt:
+                        print(i)
+                        print(formulaone)
+                    if not formulaone.istrue(i, printt):
+                        tval = False
+            elif self.formula[0] == "E":
+                tval = False
+                for i in newstructures:
+                    if formulaone.istrue(i, printt):
+                        tval = True
+                        break
+                    
+        else:
+            a = self.splitbincon()
+            formulaone, formulatwo, conn = a[0], a[1], a[2]
+            if conn == "&":
+                tval = formulaone.istrue(structure, printt) and formulatwo.istrue(structure, printt)
+            elif conn == "o":
+                tval = formulaone.istrue(structure, printt) or formulatwo.istrue(structure, printt)
+            else:
+                tval = not(formulaone.istrue(structure, printt)) or formulatwo.istrue(structure, printt)
+        if printt:
+            print(self)
+            print(tval)
+            print()
+        return tval
+
+    def genallstructures(self,domain):
+        constants = self.listconstants()
+        variables = self.listvariables()
+        relations = self.listrelations()
+        constantsdict = {}
+        variablesdict = {}
+        for i in constants:
+            constantsdict[i] = domain[0]
+        for i in variables:
+            variablesdict[i] = domain[0]
+        lenvaluelist = 0
+        for i in relations.keys():
+            lenvaluelist += len(domain)**relations[i]
+        print(lenvaluelist)
+        if lenvaluelist > 14:
+            print("Structure too big")
+            return False
+        valuelist = [False]*lenvaluelist
+        listoflists = []
+        structurelist = []
+        while False in valuelist:
+            listoflists.append(list(valuelist))
+            done = False
+            index = 0
+            while not done:
+                if valuelist[index] == False:
+                    valuelist[index] = True
+                    done = True
+                else:
+                    valuelist[index] = False
+                    index += 1
+        listoflists.append(list(valuelist))
+        for item in listoflists:
+            dictionary = {}
+            index = 0
+            for i in relations.keys():
+                dictionary[i] = []
+                startlist = [domain[0]]*relations[i]
+                for j in range(index, len(domain)**relations[i] + index):
+                    if item[j]:
+                        dictionary[i].append(list(startlist))
+                    done = False
+                    count = 0
+                    while not done:
+                        if startlist[count] != domain[-1]:
+                            startlist[count] = domain[domain.index(startlist[count]) + 1]
+                            done = True
+                        else:
+                            startlist[count] = domain[0]
+                            count += 1
+                            if count == relations[i]:
+                                done = True
+                index += len(domain)**relations[i]
+            structurelist.append(Structure(dictionary, domain, constantsdict, variablesdict))
+        return structurelist
+    
+    def genallvar_assign(self, structure, listvars):
+        structurelist = []
+        assignlist = [structure.domain[0]]*len(listvars)
+        endpoint = structure.domain[-1]
+        finishlist = [endpoint]*len(listvars)
+        while assignlist != finishlist:
+            structurelist.append(structure.makevarcopy(dict(zip(listvars, assignlist))))
+            done = False
+            index = 0
+            while not done:
+                if assignlist[index] != endpoint:
+                    assignlist[index] = structure.domain[structure.domain.index(assignlist[index])+1]
+                    done = True
+                else:
+                    assignlist[index] = structure.domain[0]
+                index += 1
+        structurelist.append(structure.makevarcopy(dict(zip(listvars, assignlist))))
+        return structurelist
+    
+    def genallconst_assign(self, structure, listconst):
+        structurelist = []
+        assignlist = [structure.domain[0]]*len(listconst)
+        endpoint = structure.domain[-1]
+        finishlist = [endpoint]*len(listconst)
+        while assignlist != finishlist:
+            structurelist.append(structure.makeconstcopy(dict(zip(listconst, assignlist))))
+            done = False
+            index = 0
+            while not done:
+                if assignlist[index] != endpoint:
+                    assignlist[index] = structure.domain[structure.domain.index(assignlist[index])+1]
+                    done = True
+                else:
+                    assignlist[index] = structure.domain[0]
+                index += 1
+        structurelist.append(structure.makeconstcopy(dict(zip(listconst, assignlist))))
+        return structurelist
+        
+    
+    def listatoms(self):
+        atoms = []
+        if self.isatomic():
+            atoms = [self]
+        else:
+            list1 = self.findprimesubformulas()
+            for i in list1:
+                for j in i.listatoms():
+                    if j not in atoms:
+                        atoms.append(j)
+        return atoms
+    
+    def listconstants(self):
+        constants = []
+        atomslist = self.listatoms()
+        for atom in atomslist:
+            list1 = converttolist(atom.formula[4:-1])
+            for i in list1:
+                if self.isconstant(i) and i not in constants:
+                    constants.append(i)
+        return constants
+    
+    def listvariables(self):
+        variables = []
+        atomslist = self.listatoms()
+        for atom in atomslist:
+            list1 = converttolist(atom.formula[4:-1])
+            for i in list1:
+                if self.isvariable(i) and i not in variables:
+                    variables.append(i)
+        return variables
+    
+    def listrelations(self):
+        relations = {}
+        atomslist = self.listatoms()
+        for atom in atomslist:
+            relation = atom.formula[0] + atom.formula[2]
+            arity = len(converttolist(atom.formula[4:-1]))
+            if relation not in relations:
+                relations[relation] = arity
+        return relations
+        
+    
+    def issatisfiable(self):
+        structurelist = self.genallstructures(["*1","*2","*3"])
+        for i in structurelist:
+            structurelist2 = self.genallconst_assign(i, self.listconstants())
+            for j in structurelist2:
+                if self.istrue(j,False):
+                    print("Formula true in structure: "+str(j))
+                    return True
+        return False
+            
+            
+
+class Structure(Formula):
+    def __init__(self, relations, domain, constants, variables):
+        self.relationasg =  relations
+        self.domain = domain
+        self.constantasg = constants
+        self.varasg = variables
+        
+    def __repr__(self):
+        string = "Domain: "+str(self.domain)+"\n"+"Constants: "+str(self.constantasg)+"\n"+"Variables :"+str(self.varasg)+"\n"+"Predicates: "+str(self.relationasg)+"\n"
+        return string
+    
+    def makevarcopy(self, variabledict):
+        newvarasg = dict(self.varasg)
+        for key in variabledict.keys():
+            newvarasg[key] = variabledict[key]
+        return Structure(self.relationasg, self.domain, self.constantasg, newvarasg)
+    
+    def makeconstcopy(self, constdict):
+        newconstasg = dict(self.constantasg)
+        for key in constdict.keys():
+            newconstasg[key] = constdict[key]
+        return Structure(self.relationasg, self.domain, newconstasg, self.varasg)
