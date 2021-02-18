@@ -10,6 +10,7 @@ Created on Mon Feb  1 17:54:43 2021
 Created on Wed Jan 27 14:21:59 2021
 
 @author: iceti
+
 """
 
 def converttolist(list1):
@@ -23,8 +24,8 @@ def converttolist(list1):
             a += i
     returnlist.append(a)
     return returnlist
-        
-class Formula:
+
+class Logic:
     integers = ["1","2","3","4","5","6","7","8","9","0"]
     relations = ["P","Q","R"]
     const = ["a","b","c"]
@@ -32,28 +33,53 @@ class Formula:
     quantifiers = ["A", "E"]
     variables = ["x", "y", "z"]
     
+        
+class Formula(Logic):
+    
     def __init__(self,text):
-        self.formula = list(text)
+        self.convertterms(text)
         self.printformula = list(text)
-        for i in range(len(self.formula)):
-            if self.formula[i] == "A":
+        for i in range(len(self.printformula)):
+            if self.printformula[i] == "A":
                 self.printformula[i] = "\u2200"
-            if self.formula[i] == "E":
+            if self.printformula[i] == "E":
                 self.printformula[i] = "\u2203"
-            if self.formula[i] == "&":
+            if self.printformula[i] == "&":
                 self.printformula[i] = "\u2227"
-            if self.formula[i] == "o":
+            if self.printformula[i] == "o":
                 self.printformula[i] = "\u2228"
-            if self.formula[i] == ">":
+            if self.printformula[i] == ">":
                 self.printformula[i] = "\u2192"
-            if self.formula[i] == "n":
+            if self.printformula[i] == "n":
                 self.printformula[i] = "\u00AC"
+                
+    def convertterms(self,text):
+        list1 = list(text)
+        self.formula = []
+        term = False
+        for i in list1:
+            if term == True and i in self.integers:
+                a += i
+            elif term == True:
+                term = False
+                self.formula.append(a)
+            if (i in self.const or i in self.variables) and term == False:
+                a = i
+                term = True
+            elif term == False:
+                self.formula.append(i)
     
     def __repr__(self):
         return "".join(self.printformula)
     
     def __len__(self):
         return(len(self.formula))
+        
+    def __eq__(self, other):
+        if self.formula == other.formula:
+            return True
+        else:
+            return False
         
     def getrawtext(self):
         return "".join(self.formula)
@@ -110,9 +136,28 @@ class Formula:
         else:
             return False
         
+    def isfact(self):
+        if self.isatomic():
+            if self.listvariables() == []:
+                return True
+        return False
+    
+    def isCQ(self):
+        if self.formula[0] == "E" and self.isquantifier():
+            newformula = self.findprimesubformulas()[0]
+            connectives = newformula.listconnectives()
+        else:
+            connectives = self.listconnectives()
+        if connectives == [] or connectives == ["&"]:
+            return True
+        else:
+            return False
+        
+        
     def isquantifier(self):
-        if self.formula[0] in self.quantifiers and self.formula[1] == "[" and self.formula[-1] == "]":
-            list1 = converttolist(self.formula[2:-1])
+        if self.formula[0] in self.quantifiers and self.formula[1] == "[" and "]" in self.formula:
+            index = self.formula.index("]")
+            list1 = converttolist(self.formula[2:index])
             valid = True
             for i in range(len(list1)):
                 if not self.isterm(list1[i]):
@@ -138,7 +183,7 @@ class Formula:
                 cont = False
                 count = self.formula.index("]",count)
         text1 = self.formula[1:count+1]
-        text2 = self.formula[count+2:-2]
+        text2 = self.formula[count+2:-1]
         conn = self.formula[count+1]
         return [Formula(text1), Formula(text2), conn]
     
@@ -178,13 +223,12 @@ class Formula:
                 return False
             else:
                 text1 = self.formula[1:count+1]
-                text2 = self.formula[count+2:-2]
+                text2 = self.formula[count+2:-1]
                 return [Formula(text1), Formula(text2)]
         elif self.formula[0] == "n":
             return [Formula(self.formula[1:])]
-        elif self.formula[0] in self.quantifiers and "]" in self.formula:
-            if Formula(self.formula[1:self.formula.index("]")+1]).isquantifier:
-                return [Formula(self.formula[self.formula.index("]")+1:])]        
+        elif self.isquantifier():
+            return [Formula(self.formula[self.formula.index("]")+1:])]        
         else:
             return False
         
@@ -371,6 +415,20 @@ class Formula:
             if relation not in relations:
                 relations[relation] = arity
         return relations
+    
+    def listconnectives(self):
+        subformulas = self.findprimesubformulas()
+        if subformulas == True:
+            return []
+        if self.formula[0] in ["A","E","n"]:
+            connectives = [self.formula[0]]
+        else:
+            connectives = [self.splitbincon()[2]]
+        for i in subformulas:
+            for j in i.listconnectives():
+                if j not in connectives:
+                    connectives.append(j)
+        return connectives
         
     
     def issatisfiable(self):
@@ -382,10 +440,31 @@ class Formula:
                     print("Formula true in structure: "+str(j))
                     return True
         return False
-            
+    
+    def gethead(self):
+        if self.formula[0] in self.quantifiers:
+            head = self.findprimesubformulas()[0].findprimesubformulas()[1]
+        else:
+            head = self.findprimesubformulas()[1]
+        return head
+        
+    def getbody(self):
+        if self.formula[0] in self.quantifiers:
+            body = self.findprimesubformulas()[0].findprimesubformulas()[0]
+        else:
+            body = self.findprimesubformulas()[0]
+        return body
+    
+    def replace(self, termdict):
+        newtext = list(self.formula)
+        keys = termdict.keys()
+        for i in range(len(newtext)):
+            if newtext[i] in keys:
+                newtext[i] = termdict[newtext[i]]
+        return Formula(newtext)
             
 
-class Structure(Formula):
+class Structure(Logic):
     def __init__(self, relations, domain, constants, variables):
         self.relationasg =  relations
         self.domain = domain
@@ -407,3 +486,83 @@ class Structure(Formula):
         for key in constdict.keys():
             newconstasg[key] = constdict[key]
         return Structure(self.relationasg, self.domain, newconstasg, self.varasg)
+    
+class Database(Logic):
+    def __init__(self, facts, TGDs):
+        self.facts = facts
+        self.TGDs = TGDs
+        
+    def __repr__(self):
+        string = "Facts:\n"
+        for i in self.facts:
+            string += str(i) + "\n"
+        string += "TGDs:\n"
+        for i in self.TGDs:
+            string += str(i) + "\n"
+        return string
+    
+    def getfirstinstance(self, TGD):
+        TGD = TGD.findprimesubformulas()[0]
+        dictionary = {}
+        for i in TGD.listvariables():
+            dictionary[i] = self.constants[0]
+        return [TGD.replace(dictionary), dictionary]
+    
+    def getnextinstance(self, TGD, dictionary):
+        values = list(dictionary.values())
+        if values == [self.constants[-1]]*len(values):
+            return True
+        TGD = TGD.findprimesubformulas()[0]
+        newdictionary = {}
+        variables = TGD.listvariables()
+        done = False
+        count = 0
+        while not done:
+            if dictionary[variables[count]] == self.constants[-1]:
+                dictionary[variables[count]] = self.constants[0]
+                count += 1
+            else:
+                index = self.constants.index(dictionary[variables[count]])
+                dictionary[variables[count]] = self.constants[index + 1]
+                done = True
+        return [TGD.replace(dictionary), dictionary]
+            
+    
+    def isupheld(self, query):
+        self.constants = []
+        for i in self.facts:
+            for j in i.listconstants():
+                if j not in self.constants:
+                    self.constants.append(j)
+        for i in self.TGDs:
+            firstinstance = self.getfirstinstance(i)
+            TGD, dictionary = firstinstance[0], firstinstance[1]
+            done = False
+            while not done:
+                atoms = TGD.getbody().listatoms()
+                subset = True
+                for atom in atoms:
+                    if atom not in self.facts:
+                        subset = False
+                if subset:
+                    headatoms = TGD.gethead().listatoms()
+                    for j in headatoms:
+                        if j not in self.facts:
+                            self.facts.append(j)
+                    print("facts "+str(self.facts))
+                nextinstance = self.getnextinstance(i, dictionary)
+                if nextinstance == True:
+                    done = True
+                else:
+                    TGD, dictionary = nextinstance[0], nextinstance[1]
+        if query.formula[0] == "E":
+            query = query.findprimesubformulas()[0]
+        qatoms = query.listatoms()
+        if query.listvariables() == []:
+            subset = True
+            for atom in qatoms:
+                if atom not in self.facts:
+                    subset = False
+            return subset
+            
+    
